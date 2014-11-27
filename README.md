@@ -4,7 +4,7 @@ opencore-amr-iOS
 iOS port of opencore-amr
 
 Refer to README which is from original package.
-Refer to build_ios_xcode5.sh for build details. Please note arm64 and x86_64 requires Xcode5.
+Refer to build_ios_xcode5.sh for build details. Please note arm64 and x86_64 requires Xcode 5 or higher. Current AppStore submission requires Xcode 6.
 
 Build_ios_*.sh is modified from http://blog.csdn.net/favormm/article/details/6772097
 
