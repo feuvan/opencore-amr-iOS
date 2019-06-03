@@ -468,48 +468,26 @@ extern "C"
      Returns:
         product = 16-bit limited product of var1 and var2 (Word16)
     */
-//     static inline Word16 mult(Word16 var1, Word16 var2, Flag *pOverflow)
-// {
-//         register Word32 ra = var1;
-//         register Word32 rb = var2;
-//         Word32 product;
-//         Word32 temp;
-
-//         OSCL_UNUSED_ARG(pOverflow);
-
-//         __asm__ volatile(
-//             "smulbb %0, %1, %2"
-//     : "=r"(temp)
-//                     : "r"(ra), "r"(rb)
-//                 );
-//         __asm__ volatile(
-//             "qadd %0, %1, %2\n\t"
-//             "mov %0, %0, asr #16"
-//     : "=&r*i"(product)
-//                     : "r"(temp), "r"(temp)
-//                 );
-
-//         return ((Word16) product);
-//     }
-    // libstagefright/codecs/amrnb/common/include/mult.h
     static inline Word16 mult(Word16 var1, Word16 var2, Flag *pOverflow)
-    {
-        register Word32 product;
+{
+        register Word32 ra = var1;
+        register Word32 rb = var2;
+        Word32 product;
+        Word32 temp;
 
-        product = ((Word32) var1 * var2) >> 15;
+        OSCL_UNUSED_ARG(pOverflow);
 
-        /* Saturate result (if necessary). */
-        /* var1 * var2 >0x00007fff is the only case */
-        /* that saturation occurs. */
-
-        if (product > 0x00007fffL)
-        {
-            *pOverflow = 1;
-            product = (Word32) MAX_16;
-        }
-
-
-        /* Return the product as a 16 bit value by type casting Word32 to Word16 */
+        __asm__ volatile(
+            "smulbb %0, %1, %2"
+    : "=r"(temp)
+                    : "r"(ra), "r"(rb)
+                );
+        __asm__ volatile(
+            "qadd %0, %1, %2\n\t"
+            "mov %0, %0, asr #16"
+    : "=&r*i"(product)
+                    : "r"(temp), "r"(temp)
+                );
 
         return ((Word16) product);
     }
