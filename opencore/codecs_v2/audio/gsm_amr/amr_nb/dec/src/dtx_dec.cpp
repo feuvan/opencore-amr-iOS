@@ -1337,6 +1337,8 @@ void dtx_dec(
         st->old_log_en = st->log_en;
         /* subtract 1/8 in Q11 i.e -6/8 dB */
         st->log_en = st->log_en - 256;
+        if (st->log_en < 0)
+            st->log_en = 0;
     }
 
     /* reset interpolation length timer

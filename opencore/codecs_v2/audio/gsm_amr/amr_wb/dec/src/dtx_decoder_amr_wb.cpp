@@ -432,6 +432,8 @@ int16 dtx_dec_amr_wb(
         st->old_log_en = st->log_en;
         /* subtract 1/8 in Q9 (energy), i.e -3/8 dB */
         st->log_en -= 64;
+        if (st->log_en < 0)
+            st->log_en = 0;
     }
     /* reset interpolation length timer if data has been updated.        */
 

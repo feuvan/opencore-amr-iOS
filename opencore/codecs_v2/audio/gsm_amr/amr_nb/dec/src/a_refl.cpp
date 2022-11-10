@@ -201,6 +201,7 @@ void A_Refl(
     /* local variables */
     Word16 i;
     Word16 j;
+    Word16 k;
     Word16 aState[M];
     Word16 bState[M];
     Word16 normShift;
@@ -222,9 +223,9 @@ void A_Refl(
     {
         if (abs_s(aState[i]) >= 4096)
         {
-            for (i = 0; i < M; i++)
+            for (j = 0; j < M; j++)
             {
-                refl[i] = 0;
+                refl[j] = 0;
             }
             break;
         }
@@ -257,9 +258,9 @@ void A_Refl(
 
             if (L_tmp_abs > 32767)
             {
-                for (i = 0; i < M; i++)
+                for (k = 0; k < M; k++)
                 {
-                    refl[i] = 0;
+                    refl[k] = 0;
                 }
                 break;
             }

@@ -1,7 +1,7 @@
 dnl                                               -*- Autoconf -*-
 dnl Process this file with autoconf to produce a configure script.
 
-AC_INIT([opencore-amr], [0.1.5], [http://sourceforge.net/projects/opencore-amr/])
+AC_INIT([opencore-amr], [0.1.6], [http://sourceforge.net/projects/opencore-amr/])
 AC_CONFIG_AUX_DIR(.)
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([tar-ustar foreign])
@@ -72,8 +72,8 @@ AC_CHECK_FUNCS([memset])
 dnl OpenCORE AMR soname version to use
 dnl goes by ‘current[:revision[:age]]’ with the soname ending up as
 dnl current.age.revision.
-OPENCORE_AMRNB_VERSION=0:3:0
-OPENCORE_AMRWB_VERSION=0:3:0
+OPENCORE_AMRNB_VERSION=0:5:0
+OPENCORE_AMRWB_VERSION=0:5:0
 AC_SUBST(OPENCORE_AMRNB_VERSION)
 AC_SUBST(OPENCORE_AMRWB_VERSION)
 

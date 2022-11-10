@@ -1,3 +1,7 @@
+0.1.6
+ - Fixed an infinite loop when decoding some AMR-NB samples
+ - Fixed noise spikes when decoding non-voice frames for both AMR-NB and AMR-WB
+
 0.1.5
  - Fix an autotools issue with cross compiling from the 0.1.4 release
 
