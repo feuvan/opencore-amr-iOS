@@ -83,7 +83,7 @@ for PLATFORM in ${PLATFORMS}; do
     --disable-shared --enable-static \
 	CXX="${CXX} -arch ${ARCH2:-${ARCH}} " \
     CFLAGS="${CFLAGS}" \
-	CXXFLAGS="${CFLAGS} -stdlib=libc++ -isystem ${SDKROOT}/usr/include" \
+	CXXFLAGS="${CFLAGS} -stdlib=libc++ -isystem ${SDKROOT}/usr/include"
   set +x
 
   make -j4 V=0
