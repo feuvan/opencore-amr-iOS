@@ -4,7 +4,7 @@ opencore-amr-iOS
 iOS port of opencore-amr
 
 Refer to `README` for opencore-amr info which is from original package.
-Run `build_ios_xcode10.sh` to build as current AppStore submission requires Xcode 10.
+Run `./configure` then `build_ios_xcode10.sh` to build.
 Then use `opencore-amrnb.framework` or `opencore-amrwb.framework`
 
 packaging refer to https://www.jianshu.com/p/9eef3afdae11
