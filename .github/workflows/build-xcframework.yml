@@ -74,7 +74,7 @@ jobs:
       id: version
       run: |
         if [ -n "${{ github.event.inputs.release_version }}" ]; then
-          echo "version=${{ github.event.inputs.release_version }}" >> $GITHUB_OUTPUT
+          echo "version=v${{ github.event.inputs.release_version }}" >> $GITHUB_OUTPUT
         else
           echo "version=v0.0.${{ github.run_number }}-debug" >> $GITHUB_OUTPUT
         fi
