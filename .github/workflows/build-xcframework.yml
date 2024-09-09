@@ -83,9 +83,27 @@ jobs:
           echo "version=v${{ github.run_number }}" >> $GITHUB_OUTPUT
         fi
 
-    - name: Create Release
-      id: create_release
-      uses: softprops/action-gh-release@v1
+    - name: List output directory
+      run: |
+        echo "Current working directory: $(pwd)"
+        echo "OUTPUT_DIR: ${{ env.OUTPUT_DIR }}"
+        echo "Contents of OUTPUT_DIR:"
+        ls -la ${{ env.OUTPUT_DIR }}
+        echo "Full paths of .xcframework directories:"
+        find ${{ env.OUTPUT_DIR }} -name "*.xcframework" -type d
+        echo "Structure of .xcframework directories:"
+        find ${{ env.OUTPUT_DIR }} -name "*.xcframework" -type d -exec sh -c 'echo "{}:"; ls -R "{}"' \;
+
+    - name: Zip XCFrameworks
+      run: |
+        cd ${{ env.OUTPUT_DIR }}
+        for framework in *.xcframework; do
+          zip -r "${framework%.xcframework}.xcframework.zip" "$framework"
+        done
+        ls -la
+
+    - name: Create Release and Upload XCFrameworks
+      uses: softprops/action-gh-release@v2
       if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
       with:
         tag_name: ${{ steps.version.outputs.version }}
@@ -93,28 +111,26 @@ jobs:
         draft: false
         prerelease: false
         generate_release_notes: true
-
-    - name: Upload XCFrameworks to Release
-      uses: softprops/action-gh-release@v1
-      if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
-      with:
-        files: ${{ env.OUTPUT_DIR }}/*.xcframework
-        tag_name: ${{ steps.version.outputs.version }}
+        fail_on_unmatched_files: true
+        files: |
+          ${{ env.OUTPUT_DIR }}/*.xcframework.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Check Release
       run: |
         echo "Checking release ${{ steps.version.outputs.version }}"
-        release_info=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+        release_info=$(curl -sS -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
                            https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ steps.version.outputs.version }})
-        echo "Release info: $release_info"
-        assets=$(echo $release_info | jq '.assets')
-        echo "Release assets: $assets"
+        echo "Release info:"
+        echo "$release_info" | jq '.'
+        assets=$(echo "$release_info" | jq -r '.assets[].name')
+        echo "Release assets:"
+        echo "$assets"
 
-    - name: Upload XCFrameworks
+    - name: Upload XCFrameworks as Workflow Artifacts
       uses: actions/upload-artifact@v4
       with:
         name: XCFrameworks
-        path: ${{ env.OUTPUT_DIR }}/*.xcframework
+        path: ${{ env.OUTPUT_DIR }}/*.xcframework.zip
         if-no-files-found: error
