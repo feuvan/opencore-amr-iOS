@@ -16,6 +16,8 @@ on:
 
 env:
   OUTPUT_DIR: ${{ github.workspace }}/output
+  LIBRARIES: '("opencore-amrnb" "opencore-amrwb")'
+  PLATFORMS: '("macos" "iphoneos" "iphonesimulator")'
 
 jobs:
   build:
@@ -84,6 +86,7 @@ jobs:
         ls -R ${{ env.OUTPUT_DIR }}
 
     - name: Create fat libraries using lipo
+      shell: bash
       run: |
         mkdir -p "${OUTPUT_DIR}/fat"
         declare -A ARCHITECTURES=(
@@ -91,8 +94,8 @@ jobs:
           ["iphoneos"]="arm64"
           ["iphonesimulator"]="x86_64 arm64"
         )
-
-        LIBRARIES=("libopencore-amrnb" "libopencore-amrwb")
+        eval "LIBRARIES=(${LIBRARIES})"
+        eval "PLATFORMS=(${PLATFORMS})"
 
         for lib in "${LIBRARIES[@]}"; do
           # For macOS
@@ -108,30 +111,32 @@ jobs:
         done
         
     - name: Create XCFrameworks
+      shell: bash
       run: |
         mkdir -p "${OUTPUT_DIR}/Headers/"
-        
-        # For opencore-amrnb
-        rm -rf ${OUTPUT_DIR}/Headers/*
-        rm -rf ${OUTPUT_DIR}/opencore-amrnb.xcframework
-        cp -a amrnb/{interf_dec,interf_enc}.h ${OUTPUT_DIR}/Headers/
-        
-        xcodebuild -create-xcframework \
-          -library ${OUTPUT_DIR}/fat/libopencore-amrnb-macos.a -headers ${OUTPUT_DIR}/Headers \
-          -library ${OUTPUT_DIR}/fat/libopencore-amrnb-iphoneos.a -headers ${OUTPUT_DIR}/Headers \
-          -library ${OUTPUT_DIR}/fat/libopencore-amrnb-iphonesimulator.a -headers ${OUTPUT_DIR}/Headers \
-          -output ${OUTPUT_DIR}/opencore-amrnb.xcframework
-        
-        # For opencore-amrwb
-        rm -rf ${OUTPUT_DIR}/Headers/*
-        rm -rf ${OUTPUT_DIR}/opencore-amrwb.xcframework
-        cp -a amrwb/{dec_if,if_rom}.h ${OUTPUT_DIR}/Headers/
-        
-        xcodebuild -create-xcframework \
-          -library ${OUTPUT_DIR}/fat/libopencore-amrwb-macos.a -headers ${OUTPUT_DIR}/Headers \
-          -library ${OUTPUT_DIR}/fat/libopencore-amrwb-iphoneos.a -headers ${OUTPUT_DIR}/Headers \
-          -library ${OUTPUT_DIR}/fat/libopencore-amrwb-iphonesimulator.a -headers ${OUTPUT_DIR}/Headers \
-          -output ${OUTPUT_DIR}/opencore-amrwb.xcframework
+        eval "LIBRARIES=(${LIBRARIES})"
+        eval "PLATFORMS=(${PLATFORMS})"        
+        declare -A HEADERS=(
+          ["opencore-amrnb"]="amrnb/interf_dec.h amrnb/interf_enc.h"
+          ["opencore-amrwb"]="amrwb/dec_if.h amrwb/if_rom.h"
+        )        
+        for lib in "${!HEADERS[@]}"; do
+          rm -rf ${OUTPUT_DIR}/Headers/*
+          rm -rf ${OUTPUT_DIR}/${lib}.xcframework
+          # Copy headers
+          for header in ${HEADERS[$lib]}; do
+            cp -a $header ${OUTPUT_DIR}/Headers/
+          done
+          # Prepare xcodebuild command
+          cmd="xcodebuild -create-xcframework"
+          for platform in "${PLATFORMS[@]}"; do
+            cmd+=" -library ${OUTPUT_DIR}/fat/lib${lib}-${platform}.a"
+            cmd+=" -headers ${OUTPUT_DIR}/Headers"
+          done
+          cmd+=" -output ${OUTPUT_DIR}/${lib}.xcframework"
+          # Execute xcodebuild command
+          eval $cmd
+        done
 
     - name: Zip XCFrameworks
       run: |
