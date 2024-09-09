@@ -1,104 +1,105 @@
 #!/bin/bash
-### more reference https://chromium.googlesource.com/webm/libwebp/+/refs/heads/master/iosbuild.sh
-set -e
+set -ex
 
-# Extract the latest SDK version from the final field of the form: iphoneosX.Y
-readonly SDK=$(xcodebuild -showsdks \
-  | grep iphoneos | sort | tail -n 1 | awk '{print substr($NF, 9)}'
-)
-# Extract Xcode version.
-readonly XCODE=$(xcodebuild -version | grep Xcode | cut -d " " -f2)
-if [[ -z "${XCODE}" ]]; then
-  echo "Xcode not available"
-  exit 1
-fi
-readonly OLDPATH=${PATH}
-# Add iPhoneOS-V6 to the list of platforms below if you need armv6 support.
-# Note that iPhoneOS-V6 support is not available with the iOS6 SDK.
-PLATFORMS="iPhoneSimulator iPhoneSimulator64"
-PLATFORMS+=" iPhoneOS-V7 iPhoneOS-V7s iPhoneOS-V7-arm64"
-readonly PLATFORMS
-readonly SRCDIR=$(dirname $0)
-readonly TOPDIR=$(pwd)
-readonly BUILDDIR="${TOPDIR}/iosbuild"
-readonly AMRNBTARGETDIR="${TOPDIR}/opencore-amrnb.framework"
-readonly AMRWBTARGETDIR="${TOPDIR}/opencore-amrwb.framework"
+# Set variables
+SRC_DIR=$(dirname $0)
+OUTPUT_DIR="$(pwd)/output"
 readonly DEVELOPER=$(xcode-select --print-path)
 readonly PLATFORMSROOT="${DEVELOPER}/Platforms"
-readonly LIPO=$(xcrun -sdk iphoneos${SDK} -find lipo)
-AMRNBLIBLIST=''
-AMRWBLIBLIST=''
 
-if [[ -z "${SDK}" ]]; then
-  echo "iOS SDK not available"
-  exit 1
-elif [[ ${SDK%%.*} -gt 8 ]]; then
-  EXTRA_CFLAGS="-fembed-bitcode"
-elif [[ ${SDK} < 7.0 ]]; then
-  echo "You need iOS SDK version 7.0 or above"
-  exit 1
-else
-  echo "iOS SDK Version ${SDK}"
-fi
+aclocal && autoconf && automake --add-missing
 
-rm -rf ${BUILDDIR} ${AMRNBTARGETDIR} ${AMRWBTARGETDIR}
-mkdir -p ${BUILDDIR} ${AMRNBTARGETDIR}/Headers/ ${AMRWBTARGETDIR}/Headers/
+# Create output directory
+mkdir -p "$OUTPUT_DIR"
 
-make clean
-for PLATFORM in ${PLATFORMS}; do
-  ARCH2=""
-  CXX="xcrun --sdk iphoneos clang++  "
-  if [[ "${PLATFORM}" == "iPhoneOS-V7-arm64" ]]; then
-    PLATFORM="iPhoneOS"
-    ARCH="aarch64"
-    ARCH2="arm64"
-  elif [[ "${PLATFORM}" == "iPhoneOS-V7s" ]]; then
-    PLATFORM="iPhoneOS"
-    ARCH="armv7s"
-  elif [[ "${PLATFORM}" == "iPhoneOS-V7" ]]; then
-    PLATFORM="iPhoneOS"
-    ARCH="armv7"
-  elif [[ "${PLATFORM}" == "iPhoneOS-V6" ]]; then
-    PLATFORM="iPhoneOS"
-    ARCH="armv6"
-  elif [[ "${PLATFORM}" == "iPhoneSimulator64" ]]; then
-    PLATFORM="iPhoneSimulator"
-    ARCH="x86_64"
-	CXX="xcrun --sdk iphonesimulator clang++ "
-  else
-    ARCH="i386"
-	CXX="xcrun --sdk iphonesimulator clang++ "
-  fi
-  ROOTDIR="${BUILDDIR}/${PLATFORM}-${SDK}-${ARCH}"
-  mkdir -p "${ROOTDIR}"
-  DEVROOT="${DEVELOPER}/Toolchains/XcodeDefault.xctoolchain"
-  SDKROOT="${PLATFORMSROOT}/"
-  SDKROOT+="${PLATFORM}.platform/Developer/SDKs/${PLATFORM}${SDK}.sdk/"
-  CFLAGS="-arch ${ARCH2:-${ARCH}} -pipe -isysroot ${SDKROOT} -O3 -DNDEBUG"
-  CFLAGS+=" -miphoneos-version-min=7.0 ${EXTRA_CFLAGS}"
-  set -x
-  export PATH="${DEVROOT}/usr/bin:${OLDPATH}"
-  ${SRCDIR}/configure --host=${ARCH}-apple-darwin --prefix=${ROOTDIR} \
-    --build=$(${SRCDIR}/config.guess) \
+config_library() {
+    local platform=$1
+    local arch=$2
+    local sdk=$3
+    
+    ROOTDIR="${OUTPUT_DIR}/${platform}-${arch}-${sdk}"
+    mkdir -p "${ROOTDIR}"
+
+    SDKROOT="${PLATFORMSROOT}/"
+    SDKROOT+="${sdk}.platform/Developer/SDKs/${sdk}.sdk/"
+    CFLAGS="-arch ${ARCH2:-${arch}} -pipe -isysroot ${SDKROOT} -O3 -DNDEBUG"
+
+    if [[ ${platform} == "iphoneos" ]]; then
+        CFLAGS+=" -miphoneos-version-min=7.0 ${EXTRA_CFLAGS}"
+    fi
+    if [[ ${platform} == "iphonesimulator" ]]; then
+        CFLAGS+=" -mios-simulator-version-min=7.0 ${EXTRA_CFLAGS}"
+    fi
+    if [[ ${platform} == "macosx" ]]; then
+        CFLAGS+=" -mmacosx-version-min=10.9 ${EXTRA_CFLAGS}"
+    fi
+
+    CXX="xcrun --sdk ${platform} clang++ "
+    
+    ${SRC_DIR}/configure --host=${arch}-apple-darwin --prefix=${ROOTDIR} \
+    --build=$(${SRC_DIR}/config.guess) \
     --disable-shared --enable-static \
-	CXX="${CXX} -arch ${ARCH2:-${ARCH}} " \
+    CXX="${CXX} -arch ${ARCH2:-${arch}} " \
     CFLAGS="${CFLAGS}" \
-	CXXFLAGS="${CFLAGS} -stdlib=libc++ -isystem ${SDKROOT}/usr/include"
-  set +x
+	  CXXFLAGS="${CFLAGS} -isystem ${SDKROOT}/usr/include"
+}
 
-  make -j4 V=0
-  make install
-  AMRNBLIBLIST+=" ${ROOTDIR}/lib/libopencore-amrnb.a"
-  AMRWBLIBLIST+=" ${ROOTDIR}/lib/libopencore-amrwb.a"
+# Function to build for a specific platform and architecture
+build_library() {
+    local platform=$1
+    local arch=$2
+    local sdk=$3
+    local out_dir="$OUTPUT_DIR/$platform-$arch-$sdk"
 
-  make clean
-  export PATH=${OLDPATH}
-done
+    mkdir -p "$out_dir"
 
-echo "Merge into universal binary."
+    config_library $platform $arch $sdk
+  
+    make -j4 V=0
+    make install
+    make clean
+}
 
-cp -a ${SRCDIR}/amrnb/{interf_dec,interf_enc}.h ${AMRNBTARGETDIR}/Headers/
-${LIPO} -create ${AMRNBLIBLIST} -output ${AMRNBTARGETDIR}/opencore-amrnb
+create_xcframework() {
+    local lib_name=$1
 
-cp -a ${SRCDIR}/amrwb/{dec_if,if_rom}.h ${AMRWBTARGETDIR}/Headers/
-${LIPO} -create ${AMRWBLIBLIST} -output ${AMRWBTARGETDIR}/opencore-amrwb
+    lipo -create "$OUTPUT_DIR/iphonesimulator-x86_64-iPhoneSimulator/lib/lib$lib_name.a" \
+      "$OUTPUT_DIR/iphonesimulator-arm64-iPhoneSimulator/lib/lib$lib_name.a" \
+      -output "$OUTPUT_DIR/iphonesimulator-lib$lib_name.a"
+    
+    lipo -create "$OUTPUT_DIR/macosx-x86_64-MacOSX/lib/lib$lib_name.a" \
+      "$OUTPUT_DIR/macosx-arm64-MacOSX/lib/lib$lib_name.a" \
+      -output "$OUTPUT_DIR/macosx-lib$lib_name.a"
+
+    xcodebuild -create-xcframework \
+    -library "$OUTPUT_DIR/iphoneos-arm64-iPhoneOS/lib/lib$lib_name.a" \
+    -headers "$OUTPUT_DIR/Headers/" \
+    -library "$OUTPUT_DIR/iphonesimulator-lib$lib_name.a" \
+    -headers "$OUTPUT_DIR/Headers/" \
+    -library "$OUTPUT_DIR/macosx-lib$lib_name.a" \
+    -headers "$OUTPUT_DIR/Headers/" \
+    -output "$OUTPUT_DIR/$lib_name.xcframework"
+}
+
+# Build for different platforms and architectures
+build_library "macosx" "arm64" "MacOSX"
+build_library "macosx" "x86_64" "MacOSX"
+build_library "iphoneos" "arm64" "iPhoneOS"
+build_library "iphonesimulator" "x86_64" "iPhoneSimulator"
+build_library "iphonesimulator" "arm64" "iPhoneSimulator"
+
+
+# Create XCFramework
+mkdir -p "${OUTPUT_DIR}/Headers/"
+
+rm -rf ${OUTPUT_DIR}/Headers/*
+rm -rf ${OUTPUT_DIR}/opencore-amrnb.xcframework
+cp -a ${SRC_DIR}/amrnb/{interf_dec,interf_enc}.h ${OUTPUT_DIR}/Headers/
+create_xcframework "opencore-amrnb"
+
+rm -rf ${OUTPUT_DIR}/Headers/*
+rm -rf ${OUTPUT_DIR}/opencore-amrwb.xcframework
+cp -a ${SRC_DIR}/amrwb/{dec_if,if_rom}.h ${OUTPUT_DIR}/Headers/
+create_xcframework "opencore-amrwb"
+
+echo "Universal XCFramework built successfully in $OUTPUT_DIR"
