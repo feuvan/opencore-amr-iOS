@@ -36,7 +36,7 @@ jobs:
       uses: actions/cache@v4
       id: cache
       with:
-        path: ${{ env.OUTPUT_DIR }}/build-${{ matrix.config.sdk }}-${{ matrix.config.arch }}
+        path: ${{ env.OUTPUT_DIR }}
         key: ${{ runner.os }}-build-${{ matrix.config.sdk }}-${{ matrix.config.arch }}-${{ hashFiles('**/*.c', '**/*.cpp', '**/*.h', '**/*.m', '**/*.mm') }}
 
     - name: Set up Xcode
@@ -105,7 +105,6 @@ jobs:
           "${OUTPUT_DIR}/build-iphonesimulator-x86_64/iphonesimulator-x86_64-iPhoneSimulator/lib/libopencore-amrnb.a" \
           "${OUTPUT_DIR}/build-iphonesimulator-arm64/iphonesimulator-arm64-iPhoneSimulator/lib/libopencore-amrnb.a" \
           -output "${OUTPUT_DIR}/fat/libopencore-amrnb-iphonesimulator.a"
-        
         lipo -create \
           "${OUTPUT_DIR}/build-iphonesimulator-x86_64/iphonesimulator-x86_64-iPhoneSimulator/lib/libopencore-amrwb.a" \
           "${OUTPUT_DIR}/build-iphonesimulator-arm64/iphonesimulator-arm64-iPhoneSimulator/lib/libopencore-amrwb.a" \
