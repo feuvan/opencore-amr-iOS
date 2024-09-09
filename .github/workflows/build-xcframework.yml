@@ -67,19 +67,40 @@ jobs:
       with:
         path: ${{ env.OUTPUT_DIR }}
 
+    - name: List downloaded artifacts
+      run: |
+        echo "Contents of OUTPUT_DIR:"
+        ls -R ${{ env.OUTPUT_DIR }}
+
     - name: Create XCFrameworks
       run: |
         mkdir -p "${OUTPUT_DIR}/Headers/"
         
+        # For opencore-amrnb
         rm -rf ${OUTPUT_DIR}/Headers/*
         rm -rf ${OUTPUT_DIR}/opencore-amrnb.xcframework
         cp -a amrnb/{interf_dec,interf_enc}.h ${OUTPUT_DIR}/Headers/
-        ./.github/actions/create_xcframework.sh opencore-amrnb
         
+        xcodebuild -create-xcframework \
+          -library ${OUTPUT_DIR}/build-macosx-arm64/libopencore-amrnb.a -headers ${OUTPUT_DIR}/Headers \
+          -library ${OUTPUT_DIR}/build-macosx-x86_64/libopencore-amrnb.a -headers ${OUTPUT_DIR}/Headers \
+          -library ${OUTPUT_DIR}/build-iphoneos-arm64/libopencore-amrnb.a -headers ${OUTPUT_DIR}/Headers \
+          -library ${OUTPUT_DIR}/build-iphonesimulator-x86_64/libopencore-amrnb.a -headers ${OUTPUT_DIR}/Headers \
+          -library ${OUTPUT_DIR}/build-iphonesimulator-arm64/libopencore-amrnb.a -headers ${OUTPUT_DIR}/Headers \
+          -output ${OUTPUT_DIR}/opencore-amrnb.xcframework
+        
+        # For opencore-amrwb
         rm -rf ${OUTPUT_DIR}/Headers/*
         rm -rf ${OUTPUT_DIR}/opencore-amrwb.xcframework
         cp -a amrwb/{dec_if,if_rom}.h ${OUTPUT_DIR}/Headers/
-        ./.github/actions/create_xcframework.sh opencore-amrwb
+        
+        xcodebuild -create-xcframework \
+          -library ${OUTPUT_DIR}/build-macosx-arm64/libopencore-amrwb.a -headers ${OUTPUT_DIR}/Headers \
+          -library ${OUTPUT_DIR}/build-macosx-x86_64/libopencore-amrwb.a -headers ${OUTPUT_DIR}/Headers \
+          -library ${OUTPUT_DIR}/build-iphoneos-arm64/libopencore-amrwb.a -headers ${OUTPUT_DIR}/Headers \
+          -library ${OUTPUT_DIR}/build-iphonesimulator-x86_64/libopencore-amrwb.a -headers ${OUTPUT_DIR}/Headers \
+          -library ${OUTPUT_DIR}/build-iphonesimulator-arm64/libopencore-amrwb.a -headers ${OUTPUT_DIR}/Headers \
+          -output ${OUTPUT_DIR}/opencore-amrwb.xcframework
 
     - name: Zip XCFrameworks
       run: |
