@@ -16,8 +16,6 @@ on:
 
 env:
   OUTPUT_DIR: ${{ github.workspace }}/output
-  LIBRARIES: '("opencore-amrnb" "opencore-amrwb")'
-  PLATFORMS: '("macos" "iphoneos" "iphonesimulator")'
 
 jobs:
   build:
@@ -34,12 +32,20 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Get Xcode version
+      id: xcode-version
+      run: echo "version=$(xcodebuild -version | grep Xcode | awk '{print $2}')" >> $GITHUB_OUTPUT
+
+    - name: Get macOS version
+      id: macos-version
+      run: echo "version=$(sw_vers -productVersion)" >> $GITHUB_OUTPUT
+
     - name: Cache build results
       uses: actions/cache@v4
       id: cache
       with:
         path: ${{ env.OUTPUT_DIR }}
-        key: ${{ runner.os }}-build-${{ matrix.config.sdk }}-${{ matrix.config.arch }}-${{ hashFiles('**/*.c', '**/*.cpp', '**/*.h', '**/*.m', '**/*.mm') }}
+        key: ${{ runner.os }}-build-${{ matrix.config.sdk }}-${{ matrix.config.arch }}-${{ hashFiles('**/*.c', '**/*.cpp', '**/*.h', '**/*.m', '**/*.mm'， '.github/actions/*.sh') }}-${{ steps.xcode-version.outputs.version }}-${{ steps.macos-version.outputs.version }}
 
     - name: Set up Xcode
       if: steps.cache.outputs.cache-hit != 'true'
@@ -86,54 +92,57 @@ jobs:
         ls -R ${{ env.OUTPUT_DIR }}
 
     - name: Create fat libraries using lipo
-      shell: bash
       run: |
         mkdir -p "${OUTPUT_DIR}/fat"
-        declare -A ARCHITECTURES=(
-          ["macos"]="arm64 x86_64"
-          ["iphoneos"]="arm64"
-          ["iphonesimulator"]="x86_64 arm64"
-        )
-        eval "LIBRARIES=(${LIBRARIES})"
-        eval "PLATFORMS=(${PLATFORMS})"
-
-        for lib in "${LIBRARIES[@]}"; do
+        
+        MACOS_ARCHS="arm64 x86_64"
+        IPHONEOS_ARCHS="arm64"
+        IPHONESIMULATOR_ARCHS="x86_64 arm64"
+        
+        LIBRARIES="libopencore-amrnb libopencore-amrwb"
+        
+        for lib in $LIBRARIES; do
           # For macOS
-          lipo -create $(for arch in ${ARCHITECTURES["macos"]}; do echo "${OUTPUT_DIR}/build-macosx-${arch}/macosx-${arch}-MacOSX/lib/${lib}.a"; done) \
+          lipo -create $(for arch in $MACOS_ARCHS; do echo "${OUTPUT_DIR}/build-macosx-${arch}/macosx-${arch}-MacOSX/lib/${lib}.a"; done) \
             -output "${OUTPUT_DIR}/fat/${lib}-macos.a"
-
+          
           # For iOS device
           cp "${OUTPUT_DIR}/build-iphoneos-arm64/iphoneos-arm64-iPhoneOS/lib/${lib}.a" "${OUTPUT_DIR}/fat/${lib}-iphoneos.a"
-
+          
           # For iOS simulator
-          lipo -create $(for arch in ${ARCHITECTURES["iphonesimulator"]}; do echo "${OUTPUT_DIR}/build-iphonesimulator-${arch}/iphonesimulator-${arch}-iPhoneSimulator/lib/${lib}.a"; done) \
+          lipo -create $(for arch in $IPHONESIMULATOR_ARCHS; do echo "${OUTPUT_DIR}/build-iphonesimulator-${arch}/iphonesimulator-${arch}-iPhoneSimulator/lib/${lib}.a"; done) \
             -output "${OUTPUT_DIR}/fat/${lib}-iphonesimulator.a"
         done
         
     - name: Create XCFrameworks
-      shell: bash
       run: |
         mkdir -p "${OUTPUT_DIR}/Headers/"
-        eval "LIBRARIES=(${LIBRARIES})"
-        eval "PLATFORMS=(${PLATFORMS})"        
-        declare -A HEADERS=(
-          ["opencore-amrnb"]="amrnb/interf_dec.h amrnb/interf_enc.h"
-          ["opencore-amrwb"]="amrwb/dec_if.h amrwb/if_rom.h"
-        )        
-        for lib in "${!HEADERS[@]}"; do
+        
+        LIBRARIES="opencore-amrnb opencore-amrwb"
+        PLATFORMS="macos iphoneos iphonesimulator"
+        
+        for lib in $LIBRARIES; do
           rm -rf ${OUTPUT_DIR}/Headers/*
           rm -rf ${OUTPUT_DIR}/${lib}.xcframework
+          
           # Copy headers
-          for header in ${HEADERS[$lib]}; do
-            cp -a $header ${OUTPUT_DIR}/Headers/
-          done
+          case $lib in
+            opencore-amrnb)
+              cp -a amrnb/interf_dec.h amrnb/interf_enc.h ${OUTPUT_DIR}/Headers/
+              ;;
+            opencore-amrwb)
+              cp -a amrwb/dec_if.h amrwb/if_rom.h ${OUTPUT_DIR}/Headers/
+              ;;
+          esac
+          
           # Prepare xcodebuild command
           cmd="xcodebuild -create-xcframework"
-          for platform in "${PLATFORMS[@]}"; do
+          for platform in $PLATFORMS; do
             cmd+=" -library ${OUTPUT_DIR}/fat/lib${lib}-${platform}.a"
             cmd+=" -headers ${OUTPUT_DIR}/Headers"
           done
           cmd+=" -output ${OUTPUT_DIR}/${lib}.xcframework"
+          
           # Execute xcodebuild command
           eval $cmd
         done
