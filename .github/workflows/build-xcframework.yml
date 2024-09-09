@@ -3,6 +3,8 @@ name: Build XCFramework
 on:
   push:
     branches: [ main ]
+    tags:
+      - 'v*' # This will trigger the workflow on any tag starting with 'v'
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -73,16 +75,18 @@ jobs:
     - name: Determine Release Version
       id: version
       run: |
-        if [ -n "${{ github.event.inputs.release_version }}" ]; then
-          echo "version=v${{ github.event.inputs.release_version }}" >> $GITHUB_OUTPUT
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        elif [ -n "${{ github.event.inputs.release_version }}" ]; then
+          echo "version=${{ github.event.inputs.release_version }}" >> $GITHUB_OUTPUT
         else
-          echo "version=v0.0.${{ github.run_number }}-debug" >> $GITHUB_OUTPUT
+          echo "version=v${{ github.run_number }}" >> $GITHUB_OUTPUT
         fi
 
     - name: Create Release
       id: create_release
       uses: softprops/action-gh-release@v1
-      if: github.ref == 'refs/heads/main'
+      if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
       with:
         tag_name: ${{ steps.version.outputs.version }}
         name: Release ${{ steps.version.outputs.version }}
@@ -92,7 +96,7 @@ jobs:
 
     - name: Upload XCFrameworks to Release
       uses: softprops/action-gh-release@v1
-      if: github.ref == 'refs/heads/main'
+      if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
       with:
         files: |
           ${{ env.OUTPUT_DIR }}/*.xcframework
