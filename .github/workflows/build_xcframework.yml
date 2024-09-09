@@ -45,7 +45,7 @@ jobs:
       id: cache
       with:
         path: ${{ env.OUTPUT_DIR }}
-        key: ${{ runner.os }}-build-${{ matrix.config.sdk }}-${{ matrix.config.arch }}-${{ hashFiles('**/*.c', '**/*.cpp', '**/*.h', '**/*.m', '**/*.mm'， '.github/actions/*.sh') }}-${{ steps.xcode-version.outputs.version }}-${{ steps.macos-version.outputs.version }}
+        key: ${{ runner.os }}-build-${{ matrix.config.sdk }}-${{ matrix.config.arch }}-${{ hashFiles('**/*.c', '**/*.cpp', '**/*.h', '**/*.m', '**/*.mm', '.github/actions/*.sh') }}-${{ steps.xcode-version.outputs.version }}-${{ steps.macos-version.outputs.version }}
 
     - name: Set up Xcode
       if: steps.cache.outputs.cache-hit != 'true'
