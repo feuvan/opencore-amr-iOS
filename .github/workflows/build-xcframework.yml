@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Release version (e.g., 0.1.6)'
+        required: false
+        default: ''
 
 jobs:
   build:
@@ -65,8 +70,39 @@ jobs:
         cp -a amrwb/{dec_if,if_rom}.h ${OUTPUT_DIR}/Headers/
         ./.github/actions/create_xcframework.sh opencore-amrwb
 
+    - name: Determine Release Version
+      id: version
+      run: |
+        if [ -n "${{ github.event.inputs.release_version }}" ]; then
+          echo "version=${{ github.event.inputs.release_version }}" >> $GITHUB_OUTPUT
+        else
+          echo "version=v0.0.${{ github.run_number }}-debug" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Create Release
+      id: create_release
+      uses: softprops/action-gh-release@v1
+      if: github.ref == 'refs/heads/main'
+      with:
+        tag_name: ${{ steps.version.outputs.version }}
+        name: Release ${{ steps.version.outputs.version }}
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+
+    - name: Upload XCFrameworks to Release
+      uses: softprops/action-gh-release@v1
+      if: github.ref == 'refs/heads/main'
+      with:
+        files: |
+          ${{ env.OUTPUT_DIR }}/*.xcframework
+        tag_name: ${{ steps.version.outputs.version }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     - name: Upload XCFrameworks
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: XCFrameworks
         path: ${{ env.OUTPUT_DIR }}/*.xcframework
+        if-no-files-found: error
