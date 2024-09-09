@@ -32,23 +32,23 @@ jobs:
 
     - name: Build for macOS arm64
       run: |
-        ./build_library.sh macosx arm64 MacOSX
+        ./.github/actions/build_library.sh macosx arm64 MacOSX
 
     - name: Build for macOS x86_64
       run: |
-        ./build_library.sh macosx x86_64 MacOSX
+        ./.github/actions/build_library.sh macosx x86_64 MacOSX
 
     - name: Build for iOS arm64
       run: |
-        ./build_library.sh iphoneos arm64 iPhoneOS
+        ./.github/actions/build_library.sh iphoneos arm64 iPhoneOS
 
     - name: Build for iOS Simulator x86_64
       run: |
-        ./build_library.sh iphonesimulator x86_64 iPhoneSimulator
+        ./.github/actions/build_library.sh iphonesimulator x86_64 iPhoneSimulator
 
     - name: Build for iOS Simulator arm64
       run: |
-        ./build_library.sh iphonesimulator arm64 iPhoneSimulator
+        ./.github/actions/build_library.sh iphonesimulator arm64 iPhoneSimulator
 
     - name: Create XCFrameworks
       run: |
@@ -57,12 +57,12 @@ jobs:
         rm -rf ${OUTPUT_DIR}/Headers/*
         rm -rf ${OUTPUT_DIR}/opencore-amrnb.xcframework
         cp -a amrnb/{interf_dec,interf_enc}.h ${OUTPUT_DIR}/Headers/
-        ./create_xcframework.sh opencore-amrnb
+        ./.github/actions/create_xcframework.sh opencore-amrnb
         
         rm -rf ${OUTPUT_DIR}/Headers/*
         rm -rf ${OUTPUT_DIR}/opencore-amrwb.xcframework
         cp -a amrwb/{dec_if,if_rom}.h ${OUTPUT_DIR}/Headers/
-        ./create_xcframework.sh opencore-amrwb
+        ./.github/actions/create_xcframework.sh opencore-amrwb
 
     - name: Upload XCFrameworks
       uses: actions/upload-artifact@v2
