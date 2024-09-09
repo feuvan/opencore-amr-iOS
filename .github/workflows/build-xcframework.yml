@@ -1,4 +1,4 @@
-name: Build XCFramework
+name: Build and Release XCFramework
 
 on:
   push:
@@ -10,19 +10,27 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: 'Release version (e.g., 0.1.6)'
+        description: 'Release version (must start with "v", e.g., v0.1.6)'
         required: false
         default: ''
+
+env:
+  OUTPUT_DIR: ${{ github.workspace }}/output
 
 jobs:
   build:
     runs-on: macos-latest
-    
-    env:
-      OUTPUT_DIR: ${{ github.workspace }}/output
+    strategy:
+      matrix:
+        config:
+          - { sdk: 'macosx', arch: 'arm64', platform: 'MacOSX' }
+          - { sdk: 'macosx', arch: 'x86_64', platform: 'MacOSX' }
+          - { sdk: 'iphoneos', arch: 'arm64', platform: 'iPhoneOS' }
+          - { sdk: 'iphonesimulator', arch: 'x86_64', platform: 'iPhoneSimulator' }
+          - { sdk: 'iphonesimulator', arch: 'arm64', platform: 'iPhoneSimulator' }
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
 
     - name: Set up Xcode
       uses: maxim-lobanov/setup-xcode@v1
@@ -30,33 +38,34 @@ jobs:
         xcode-version: latest-stable
 
     - name: Install autotools
-      run: |
-        brew install autoconf automake libtool
+      run: brew install autoconf automake libtool
 
     - name: Setup build environment
       run: |
         aclocal && autoconf && automake --add-missing
         mkdir -p "$OUTPUT_DIR"
 
-    - name: Build for macOS arm64
+    - name: Build for ${{ matrix.config.sdk }} ${{ matrix.config.arch }}
       run: |
-        ./.github/actions/build_library.sh macosx arm64 MacOSX
+        ./.github/actions/build_library.sh ${{ matrix.config.sdk }} ${{ matrix.config.arch }} ${{ matrix.config.platform }}
 
-    - name: Build for macOS x86_64
-      run: |
-        ./.github/actions/build_library.sh macosx x86_64 MacOSX
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-${{ matrix.config.sdk }}-${{ matrix.config.arch }}
+        path: ${{ env.OUTPUT_DIR }}
+        retention-days: 1
 
-    - name: Build for iOS arm64
-      run: |
-        ./.github/actions/build_library.sh iphoneos arm64 iPhoneOS
+  create-xcframework:
+    needs: build
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v3
 
-    - name: Build for iOS Simulator x86_64
-      run: |
-        ./.github/actions/build_library.sh iphonesimulator x86_64 iPhoneSimulator
-
-    - name: Build for iOS Simulator arm64
-      run: |
-        ./.github/actions/build_library.sh iphonesimulator arm64 iPhoneSimulator
+    - name: Download all build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ${{ env.OUTPUT_DIR }}
 
     - name: Create XCFrameworks
       run: |
@@ -72,28 +81,6 @@ jobs:
         cp -a amrwb/{dec_if,if_rom}.h ${OUTPUT_DIR}/Headers/
         ./.github/actions/create_xcframework.sh opencore-amrwb
 
-    - name: Determine Release Version
-      id: version
-      run: |
-        if [[ $GITHUB_REF == refs/tags/* ]]; then
-          echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-        elif [ -n "${{ github.event.inputs.release_version }}" ]; then
-          echo "version=${{ github.event.inputs.release_version }}" >> $GITHUB_OUTPUT
-        else
-          echo "version=v${{ github.run_number }}" >> $GITHUB_OUTPUT
-        fi
-
-    - name: List output directory
-      run: |
-        echo "Current working directory: $(pwd)"
-        echo "OUTPUT_DIR: ${{ env.OUTPUT_DIR }}"
-        echo "Contents of OUTPUT_DIR:"
-        ls -la ${{ env.OUTPUT_DIR }}
-        echo "Full paths of .xcframework directories:"
-        find ${{ env.OUTPUT_DIR }} -name "*.xcframework" -type d
-        echo "Structure of .xcframework directories:"
-        find ${{ env.OUTPUT_DIR }} -name "*.xcframework" -type d -exec sh -c 'echo "{}:"; ls -R "{}"' \;
-
     - name: Zip XCFrameworks
       run: |
         cd ${{ env.OUTPUT_DIR }}
@@ -102,9 +89,38 @@ jobs:
         done
         ls -la
 
+    - name: Upload XCFrameworks
+      uses: actions/upload-artifact@v4
+      with:
+        name: XCFrameworks
+        path: ${{ env.OUTPUT_DIR }}/*.xcframework.zip
+        if-no-files-found: error
+
+  release:
+    needs: create-xcframework
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    steps:
+    - name: Download XCFrameworks
+      uses: actions/download-artifact@v4
+      with:
+        name: XCFrameworks
+
+    - name: Determine Release Version
+      id: version
+      run: |
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          VERSION=${GITHUB_REF#refs/tags/}
+        elif [[ "${{ github.event.inputs.release_version }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          VERSION=${{ github.event.inputs.release_version }}
+        else
+          echo "Error: Invalid version format. Must start with 'v' followed by semantic versioning."
+          exit 1
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
     - name: Create Release and Upload XCFrameworks
       uses: softprops/action-gh-release@v2
-      if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
       with:
         tag_name: ${{ steps.version.outputs.version }}
         name: Release ${{ steps.version.outputs.version }}
@@ -113,7 +129,7 @@ jobs:
         generate_release_notes: true
         fail_on_unmatched_files: true
         files: |
-          ${{ env.OUTPUT_DIR }}/*.xcframework.zip
+          *.xcframework.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -127,10 +143,3 @@ jobs:
         assets=$(echo "$release_info" | jq -r '.assets[].name')
         echo "Release assets:"
         echo "$assets"
-
-    - name: Upload XCFrameworks as Workflow Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: XCFrameworks
-        path: ${{ env.OUTPUT_DIR }}/*.xcframework.zip
-        if-no-files-found: error
